@@ -1,10 +1,11 @@
 # virtual env
 .venv/
 
-# data (raw / large)
+# data (raw / large / generated)
 data/raw/
 data/**/*.parquet
 data/**/*.csv
+data/**/*.npy
 
 # artifacts / models
 artifacts/
@@ -20,10 +21,3 @@ artifacts/
 __pycache__/
 .ipynb_checkpoints/
 .DS_Store
-
-
-echo "" >> .gitignore
-echo "# Data files - should be generated, not committed" >> .gitignore
-echo "data/processed/*.parquet" >> .gitignore
-echo "data/processed/*.npy" >> .gitignore
-echo "*.parquet" >> .gitignore

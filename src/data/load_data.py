@@ -1,47 +1,53 @@
+"""Load the GFP deep mutational scan assay from the raw ProteinGym table."""
+from __future__ import annotations
+
+import re
+
 import pandas as pd
-from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-IN_PATH = PROJECT_ROOT / "data" / "raw" / "proteingym_dms_substitutions.parquet"
-OUT_PATH = PROJECT_ROOT / "data" / "processed" / "proteingym_gfp_sarkisyan2016.parquet"
+from src.config import GFP_DMS_ID, PATHS
 
-GFP_ID = "GFP_AEQVI_Sarkisyan_2016"
+# Single mutation like "A23V", or several joined with ":" for multi-mutants
+# like "K3R:V55A:Q94R".
+_MUTANT_PATTERN = re.compile(r"^[A-Z]\d+[A-Z](:[A-Z]\d+[A-Z])*$")
 
-def main() -> None:
-    print("Loading:", IN_PATH)
-    df = pd.read_parquet(IN_PATH)
-    print("Raw shape:", df.shape)
+REQUIRED_COLUMNS = ("mutant", "mutated_sequence", "target_seq", "DMS_score", "DMS_score_bin")
 
-    # Filter to GFP assay
-    gfp = df[df["DMS_id"] == GFP_ID].copy()
-    print("GFP shape (raw):", gfp.shape)
 
-    # Keep only single substitutions like A23V (ProteinGym usually uses 'mutant' column)
-    if "mutant" in gfp.columns:
-        gfp = gfp[gfp["mutant"].astype(str).str.match(r"^[A-Z][0-9]+[A-Z]$")]
-    else:
-        raise KeyError("Expected column 'mutant' not found. Print columns and adjust.")
+def load_gfp_dms(raw_path=PATHS.raw_dms) -> pd.DataFrame:
+    """Load every valid GFP variant (single- and multi-mutant) with its scores.
 
-    # Ensure binary label exists and is int
-    if "DMS_score_bin" not in gfp.columns:
-        raise KeyError("Expected column 'DMS_score_bin' not found. Print columns and adjust.")
+    Returns a DataFrame with the original ProteinGym columns, restricted to
+    rows that have a well-formed `mutant` string and non-null scores.
+    """
+    df = pd.read_parquet(raw_path)
+    gfp = df[df["DMS_id"] == GFP_DMS_ID].copy()
 
-    gfp = gfp.dropna(subset=["DMS_score_bin"]).copy()
+    missing = [c for c in REQUIRED_COLUMNS if c not in gfp.columns]
+    if missing:
+        raise KeyError(f"GFP assay is missing expected columns: {missing}")
+
+    gfp = gfp[gfp["mutant"].astype(str).str.match(_MUTANT_PATTERN)]
+    gfp = gfp.dropna(subset=["DMS_score", "DMS_score_bin", "mutated_sequence"]).copy()
     gfp["DMS_score_bin"] = gfp["DMS_score_bin"].astype(int)
 
-    # Quick sanity checks
-    print("GFP shape (clean):", gfp.shape)
-    print("Label balance:")
-    print(gfp["DMS_score_bin"].value_counts())
-    print("Label balance (%):")
-    print(gfp["DMS_score_bin"].value_counts(normalize=True).round(4))
+    return gfp.reset_index(drop=True)
 
-    # Save
-    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    gfp.to_parquet(OUT_PATH, index=False)
-    print("Saved:", OUT_PATH)
+
+def save_gfp_dms(df: pd.DataFrame, out_path=PATHS.gfp_dataset) -> None:
+    """Write the loaded GFP assay to `data/processed/` for downstream steps."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(out_path, index=False)
+
+
+def main() -> None:
+    """CLI entrypoint: load the raw assay and cache it under data/processed/."""
+    df = load_gfp_dms()
+    save_gfp_dms(df)
+    print(f"Loaded {len(df)} GFP variants ({df['mutant'].str.count(':').add(1).max()} max mutations/variant)")
+    print(f"Label balance (DMS_score_bin): {df['DMS_score_bin'].value_counts().to_dict()}")
+    print(f"Saved to: {PATHS.gfp_dataset}")
 
 
 if __name__ == "__main__":
     main()
-#gfp = pd.read_parquet("data/processed/proteingym_gfp_sarkisyan2016.parquet")
