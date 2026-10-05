@@ -5,7 +5,6 @@ import re
 from dataclasses import dataclass
 from typing import List, Sequence
 
-AA20 = frozenset("ACDEFGHIKLMNPQRSTVWY")
 _SINGLE_MUTATION = re.compile(r"^([ACDEFGHIKLMNPQRSTVWY])(\d+)([ACDEFGHIKLMNPQRSTVWY])$")
 
 
@@ -32,14 +31,14 @@ def parse_mutant(mutant: str) -> List[Substitution]:
     return [parse_substitution(token) for token in mutant.split(":")]
 
 
-def apply_mutant(wt_sequence: str, mutant: str, strict: bool = True) -> str:
-    """Apply one or more substitutions (":"-joined) to a wild-type sequence."""
+def apply_mutant(wt_sequence: str, mutant: str) -> str:
+    """Apply one or more ":"-joined substitutions to a wild-type sequence."""
     residues = list(wt_sequence)
     for sub in parse_mutant(mutant):
         idx = sub.position - 1
         if idx < 0 or idx >= len(residues):
             raise ValueError(f"Position {sub.position} out of range for sequence length {len(residues)}")
-        if strict and residues[idx] != sub.from_aa:
+        if residues[idx] != sub.from_aa:
             raise ValueError(
                 f"WT mismatch at position {sub.position}: expected '{sub.from_aa}', found '{residues[idx]}'"
             )
@@ -47,6 +46,6 @@ def apply_mutant(wt_sequence: str, mutant: str, strict: bool = True) -> str:
     return "".join(residues)
 
 
-def apply_mutants(wt_sequence: str, mutants: Sequence[str], strict: bool = True) -> List[str]:
+def apply_mutants(wt_sequence: str, mutants: Sequence[str]) -> List[str]:
     """Apply `apply_mutant` to each mutant string in `mutants`."""
-    return [apply_mutant(wt_sequence, m, strict=strict) for m in mutants]
+    return [apply_mutant(wt_sequence, m) for m in mutants]
